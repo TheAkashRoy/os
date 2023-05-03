@@ -1,88 +1,124 @@
-#include<stdio.h>
-#include<stdlib.h>
-int tph, philname[20], status[20], howhung, hu[20], cho;
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdio.h>
 
-void main(){
-    int i;
-    clrscr();
-    printf("\n\nDINING PHILOSOPHER PROBLEM");
-    printf("\nEnter the total no. of philosophers: ");
-    scanf("%d", &tph);
-    for (i = 0; i < tph; i++)
-    {
-        philname[i] = (i + 1);
-        status[i] = 1;
-    }
-    printf("How many are hungry : ");
-    scanf("%d", &howhung);
-    if (howhung == tph)
-    {
-    }
-    else
-    {
-        printf("\nAll are hungry..\nDead lock stage will occur");
-        printf("\nExiting..");
-        for (i = 0; i < howhung; i++)
-        {
-            printf("Enter philosopher %d position: ", (i + 1));
-            scanf("%d", &hu[i]);
-            status[hu[i]] = 2;
-        }
-        do
-        {
-            printf("1.One can eat at a time\t2.Two can eat at a time\t3.Exit\nEnter your choice:");
-            scanf("%d", &cho);
-            switch (cho)
-            {
-            case 1:
-                one();
-                break;
-            case 2:
-                two();
-                break;
-            case 3:
-                exit(0);
-            default:
-                printf("\nInvalid option..");
-            }
-        }
-    }
+#define N 5
+#define THINKING 2
+#define HUNGRY 1
+#define EATING 0
+#define LEFT (phnum + 4) % N
+#define RIGHT (phnum + 1) % N
+
+int state[N];
+int phil[N] = { 0, 1, 2, 3, 4 };
+
+sem_t mutex;
+sem_t S[N];
+
+void test(int phnum)
+{
+	if (state[phnum] == HUNGRY
+		&& state[LEFT] != EATING
+		&& state[RIGHT] != EATING) {
+		// state that eating
+		state[phnum] = EATING;
+
+		sleep(2);
+
+		printf("Philosopher %d takes fork %d and %d\n",
+					phnum + 1, LEFT + 1, phnum + 1);
+
+		printf("Philosopher %d is Eating\n", phnum + 1);
+
+		// sem_post(&S[phnum]) has no effect
+		// during takefork
+		// used to wake up hungry philosophers
+		// during putfork
+		sem_post(&S[phnum]);
+	}
 }
-void one()
+
+// take up chopsticks
+void take_fork(int phnum)
 {
 
-while (1);
-int pos = 0, x, i;
-printf("\nAllow one philosopher to eat at any time\n");
-for (i = 0; i < howhung; i++, pos++)
-{
+	sem_wait(&mutex);
+
+	// state that hungry
+	state[phnum] = HUNGRY;
+
+	printf("Philosopher %d is Hungry\n", phnum + 1);
+
+	// eat if neighbours are not eating
+	test(phnum);
+
+	sem_post(&mutex);
+
+	// if unable to eat wait to be signalled
+	sem_wait(&S[phnum]);
+
+	sleep(1);
 }
-}
-void two()
+
+// put down chopsticks
+void put_fork(int phnum)
 {
-    printf("\nP %d is granted to eat", philname[hu[pos]]);
-    for (int x = pos; x < howhung; x++)
-        printf("\nP %d is waiting", philname[hu[x]]);
-    int i, j, s = 0, t, r, x;
-    printf("\n Allow two philosophersto eat at same time\n");
-    for (i = 0; i < howhung; i++)
-    {
-        for (j = i + 1; j < howhung; j++)
-        {
-            if (abs(hu[i] - hu[j]) >= 1 && abs(hu[i] - hu[j]) != 4)
-            {
-                printf("\n\ncombination %d \n", (s + 1));
-                t = hu[i];
-                r = hu[j];
-                s++;
-                printf("\nP %d and P %d are granted to eat", philname[hu[i]],
-                       philname[hu[j]]);
-                for (x = 0; x < howhung; x++)
-                {
-                    if ((hu[x] != t) && (hu[x] != r))
-                        printf("\nP %d is waiting", philname[hu[x]]);
-                }
-            }
-        }
-    }
+
+	sem_wait(&mutex);
+
+	// state that thinking
+	state[phnum] = THINKING;
+
+	printf("Philosopher %d putting fork %d and %d down\n",
+		phnum + 1, LEFT + 1, phnum + 1);
+	printf("Philosopher %d is thinking\n", phnum + 1);
+
+	test(LEFT);
+	test(RIGHT);
+
+	sem_post(&mutex);
+}
+
+void* philosopher(void* num)
+{
+
+	while (1) {
+
+		int* i = num;
+
+		sleep(1);
+
+		take_fork(*i);
+
+		sleep(0);
+
+		put_fork(*i);
+	}
+}
+
+int main()
+{
+
+	int i;
+	pthread_t thread_id[N];
+
+	// initialize the semaphores
+	sem_init(&mutex, 0, 1);
+
+	for (i = 0; i < N; i++)
+
+		sem_init(&S[i], 0, 0);
+
+	for (i = 0; i < N; i++) {
+
+		// create philosopher processes
+		pthread_create(&thread_id[i], NULL,
+					philosopher, &phil[i]);
+
+		printf("Philosopher %d is thinking\n", i + 1);
+	}
+
+	for (i = 0; i < N; i++)
+
+		pthread_join(thread_id[i], NULL);
 }
